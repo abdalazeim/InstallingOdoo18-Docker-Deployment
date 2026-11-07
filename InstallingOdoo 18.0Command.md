@@ -1,377 +1,420 @@
-# 🐋 دليل تثبيت Odoo 18 بالطريقة التقليدية (اليدوية) على Ubuntu باستخدام Docker Compose
+<div dir="rtl" align="right">
 
-> **النظام المدعوم:** Ubuntu 22.04 LTS / Ubuntu 24.04 LTS  
-> **الأداة:** Odoo 18 + PostgreSQL 17  
-> **حالات الاستخدام:** تحميل مجلد `deployment/odoo18` من الإنترنت أو نقله من جهاز إلى آخر وتثبيته محلياً دون الاعتماد على استنساخ من GitHub عبر أمر curl  
-> **المستوى:** مشرف نظام / مسؤول بنية تحتية  
-> **التاريخ:** نوفمبر 2026
+# دليل تثبيت Odoo 18 باستخدام Docker Compose
 
----
+**Odoo 18 · PostgreSQL 17 · Docker Compose · دعم Traefik اختياري**
 
-## 📋 جدول المحتويات
+دليل عملي لتثبيت Odoo 18 وإدارته على Ubuntu/Linux، وتشغيل أكثر من نسخة
+على الخادم نفسه عند الحاجة.
 
-1. [المتطلبات الأساسية](#-المتطلبات-الأساسية)
-2. [الطريقة الأولى: التثبيت التقليدي المحلي (بدون Git Clone)](#-الطريقة-الأولى-التضبيب-التقليدي-المحلي-بدون-Git-Clone)
-3. [الطريقة الثانية: استخدام ملف run.sh مع引数 مخصصة](#-الطريقة-الثانية-استخدام-ملف-run-sh-مع引数-مخصصة)
-4. [الطريقة الثالثة: التثبيت اليدوي الكامل (خطوة بخطوة)](#-الطريقة-الثالثة-التثبيت-اليدوي-الكامل-خطوة-بخطوة)
-5. [إدارة الحاويات](#-إدارة-الحاويات)
-6. [تشغيل نسخ متعددة من Odoo 18 على نفس الجهاز](#-تشغيل-نسخ-متعددة-من-Odoo-18-على-نفس-الجهاز)
-7. [حفظ واستعادة النسخة الاحتياطية](#-حفظ-واستعادة-النسخة-الاحتياطية)
-8. [استكشاف الأخطاء وإصلاحها](#-استكشاف-الأخطاء-وإصلاحها)
-9. [المعلومات التقنية لـ Odoo 18](#-المعلومات-التقنية-ل-Odoo-18)
-10. [البنية الداخلية للمجلد](#-البنية-الداخلية-للمجلد)
-11. [ملاحظات هامة](#-ملاحظات-هامة)
-12. [الدعم](#-الدعم)
+[التثبيت السريع](#-التثبيت-السريع) · [تثبيت نسخ متعددة](#-تثبيت-نسخ-متعددة) ·
+[إدارة الحاويات](#-إدارة-الحاويات) · [استكشاف الأخطاء](#-استكشاف-الأخطاء)
+
+</div>
 
 ---
 
-## 1. 🔧 المتطلبات الأساسية
+## 📑 المحتويات
 
-قبل بدء التثبيت، تأكد من توفر ما يلي على نظامك (يوصى باستخدام Ubuntu 22.04+):
+1. [نظرة عامة](#-نظرة-عامة)
+2. [المتطلبات](#-المتطلبات)
+3. [مخطط النظام](#-مخطط-النظام)
+4. [معلومات الدخول والمنافذ](#-معلومات-الدخول-والمنافذ)
+5. [التثبيت السريع](#-التثبيت-السريع)
+6. [الإعدادات](#️-الإعدادات)
+7. [تثبيت نسخ متعددة](#-تثبيت-نسخ-متعددة)
+8. [Traefik وHTTPS](#-traefik-وhttps-اختياري)
+9. [إدارة الحاويات](#-إدارة-الحاويات)
+10. [النسخ الاحتياطي](#-النسخ-الاحتياطي)
+11. [الصلاحيات وإعداد Linux](#️-الصلاحيات-وإعداد-linux)
+12. [استكشاف الأخطاء](#-استكشاف-الأخطاء)
+13. [هيكل المشروع والأمان](#-هيكل-المشروع-والأمان)
+14. [روابط مفيدة](#-روابط-مفيدة)
 
-| # | المتطلب | الأمر للتحقق | الأمر للتثبيت (Ubuntu) |
-|---|---------|--------------|------------------------|
-| 1 | Docker Engine | `docker --version` | `sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin` |
-| 2 | Docker Compose | `docker compose version` | يُثبّت مع Docker Engine كإضافة (`docker-compose-plugin`) |
-| 3 | sudo / صلاحيات جذر | `id` | — |
-| 4 | مساحة قرصية حرة | `df -h /` | — |
+---
 
-للتحقق من أن Docker يعمل بشكل صحيح:
+## 🔎 نظرة عامة
+
+يشغّل هذا المشروع Odoo 18 وقاعدة PostgreSQL 17 باستخدام Docker Compose.
+يمكن تثبيت نسخة واحدة مباشرة، أو تثبيت عدة نسخ مستقلة عبر `run.sh`.
+
+| الخدمة | الصورة | منافذ المضيف الافتراضية | التخزين الدائم |
+|---|---|---|---|
+| Odoo | `odoo:18` | `10018` للويب، `20018` للمحادثة | حجم Docker باسم `odoo18_data` |
+| PostgreSQL | `postgres:17` | غير مكشوف للمضيف | المجلد `postgresql/` |
+
+---
+
+## ✅ المتطلبات
+
+- Ubuntu/Linux. ويمكن استخدام Windows عبر WSL 2 مع تكامل Docker.
+- Docker Engine.
+- Docker Compose v2 (`docker compose`).
+- اتصال بالإنترنت عند تنزيل الصور أول مرة.
+- توفر المنفذين `10018` و`20018`، أو تحديد منافذ بديلة.
+
+تحقق من التثبيت:
 
 ```bash
-sudo docker run hello-world
+docker --version
+docker compose version
+docker run --rm hello-world
 ```
 
 ---
 
-## 2. 🚀 الطريقة الأولى: التثبيت التقليدي المحلي (بدون Git Clone)
+## 🏗️ مخطط النظام
 
-استخدم هذه الطريقة عند تحميل المجلد كملف مضغوط (ZIP) أو نسخه من جهاز آخر إلى الجهاز الحالي.
-
-### الخطوة 1: تحضير المجلد
-
-افتح المحطة وانتقل إلى مكان المجلد:
-
-```bash
-# إذا قمت بتنزيل المجلد كمجلد مضغوط، فك الضغط أولاً
-unzip odoo18.zip
-cd deployment/odoo18
-
-# أو إذا كان المجلد موجوداً بالفعل
-cd deployment/odoo18
+```mermaid
+flowchart LR
+    U([المستخدم]) -->|HTTP :10018| O[Odoo 18]
+    U -->|خدمة المحادثة :20018| O
+    O -->|شبكة Docker داخلية| D[(PostgreSQL 17)]
+    D --> P[(مجلد postgresql)]
+    O --> F[(حجم بيانات Odoo)]
 ```
 
-### الخطوة 2: تعيين الصلاحيات
+قاعدة PostgreSQL متاحة داخل شبكة Docker الخاصة فقط. ينتظر Odoo جاهزية قاعدة
+البيانات قبل بدء التشغيل.
+
+---
+
+## 🔐 معلومات الدخول والمنافذ
+
+| البيان | القيمة الافتراضية | الاستخدام |
+|---|---|---|
+| كلمة مرور Odoo الرئيسية | `Admin@18` | عمليات إدارة قواعد البيانات في Odoo |
+| مستخدم PostgreSQL | `odoo18` | اتصال Odoo بقاعدة البيانات |
+| كلمة مرور PostgreSQL | `odoo@18` | اتصال Odoo بقاعدة البيانات |
+| قاعدة PostgreSQL الابتدائية | `postgre` | تُنشأ عند تهيئة PostgreSQL لأول مرة |
+| واجهة Odoo | [http://localhost:10018](http://localhost:10018) | واجهة النظام |
+| منفذ المحادثة المباشرة | `20018` | خدمة المحادثة والاتصال المباشر |
+
+> كلمة مرور Odoo الرئيسية ليست كلمة مرور حساب مدير النظام داخل قاعدة Odoo.
+> استبدل القيم الافتراضية قبل إتاحة الخادم للإنترنت.
+
+---
+
+## 🚀 التثبيت السريع
+
+### 1. تنزيل المشروع
 
 ```bash
-# منح الصلاحية للتنفيذ لملف الدخول
-chmod +x entrypoint.sh
-
-# إذا كان هناك ملف run.sh، منح الصلاحية للتنفيذ أيضاً
-[ -f run.sh ] && chmod +x run.sh
-
-# تعيين صلاحيات المجلدات
-sudo chmod -R 700 postgresql
-sudo chmod -R 755 addons etc
-sudo chown -R $USER:$USER .
+git clone https://github.com/abdalazeim/InstallingOdoo18-Docker-Deployment.git
+cd InstallingOdoo18-Docker-Deployment
 ```
 
-### الخطوة 3: إنشاء مجلد PostgreSQL
+أو نزّل المستودع بصيغة ZIP وفك ضغطه، ثم انتقل إلى مجلد المشروع.
+
+### 2. إعداد البيئة والصلاحيات
 
 ```bash
+cp .env.example .env
+chmod 600 .env
 mkdir -p postgresql
+chmod 700 postgresql
+chmod +x entrypoint.sh
 ```
 
-### الخطوة 4: تشغيل الحاويات
+عدّل كلمات المرور في `.env` قبل النشر العام.
+
+### 3. تشغيل الخدمات
 
 ```bash
-# تشغيل في الخلفية (detached mode)
-sudo docker compose up -d
-
-# أو chạy في واجهة المح terminal لرؤية السجلات مباشرة
-sudo docker compose up
+docker compose pull
+docker compose up -d
+docker compose ps
 ```
 
-### الخطوة 5: الوصول إلى Odoo
+### 4. فتح النظام
 
-افتح المتصفح وانتقل إلى:
+- واجهة Odoo: [http://localhost:10018](http://localhost:10018)
+- منفذ المحادثة المباشرة: `20018`
 
-```
-http://localhost:10018
-```
+المنفذ `20018` لخدمة الاتصال المباشر، وليس واجهة ويب ثانية.
 
-للمحادثة المباشرة (Live Chat):
-
-```
-http://localhost:20018
+```mermaid
+flowchart TD
+    A([تنزيل المشروع]) --> B[نسخ .env.example إلى .env]
+    B --> C[تغيير كلمات المرور]
+    C --> D[تشغيل docker compose]
+    D --> E{هل الحاويات سليمة؟}
+    E -->|لا| F[راجع الحالة والسجلات]
+    E -->|نعم| G[افتح localhost:10018]
+    G --> H[أنشئ قاعدة Odoo وحساب المدير]
 ```
 
 ---
 
-## 3. 🚀 الطريقة الثانية: استخدام ملف run.sh (محلي أو من المستودع)
+## ⚙️ الإعدادات
 
-استخدم هذه الطريقة لتثبيت نسختين باسمين ثابتين: النسخة الأولى `odoo-live`، والنسخة الثانية `odoo-test`.
+عدّل ملف `.env` لتخصيص الإعدادات. هذا الملف مستثنى من Git؛ لا ترفعه إلى
+المستودع.
 
-### أ) التثبيت المحلي (بعد نقل/نسخ المجلد إلى الجهاز)
+| المتغير | القيمة الافتراضية | الغرض |
+|---|---|---|
+| `ODOO_IMAGE` | `odoo:18` | صورة Odoo |
+| `PG_IMAGE` | `postgres:17` | صورة PostgreSQL |
+| `POSTGRES_USER` | `odoo18` | مستخدم PostgreSQL |
+| `POSTGRES_PASSWORD` | `odoo@18` | كلمة مرور PostgreSQL |
+| `POSTGRES_DB` | `postgre` | قاعدة PostgreSQL الابتدائية |
+| `ODOO_ADMIN_PASSWORD` | `Admin@18` | كلمة مرور Odoo الرئيسية |
+| `ODOO_HTTP_PORT` | `10018` | منفذ الويب على المضيف |
+| `ODOO_CHAT_PORT` | `20018` | منفذ المحادثة على المضيف |
+| `ODOO_NETWORK` | `odoo18_internal` | شبكة Docker الداخلية |
+| `ODOO_CONTAINER_NAME` | `odoo18` | اسم حاوية Odoo |
+| `ODOO_DB_CONTAINER_NAME` | `odoo18-db` | اسم حاوية PostgreSQL |
+| `ODOO_DATA_VOLUME` | `odoo18_data` | حجم بيانات Odoo |
+| `ODOO_DOMAIN` | مطلوب لـ Traefik | اسم النطاق |
+| `DOCKER_PROXY_NETWORK` | `proxy` | شبكة Traefik الخارجية |
+| `TRAEFIK_ENTRYPOINT` | `websecure` | مدخل Traefik |
+| `CERTSRESOLVER` | `letsencrypt` | محلّل شهادات Traefik |
 
-نفّذ الأوامر من داخل مجلد النشر الذي يحتوي على `run.sh` (مثال: `deployment/odoo18`). سكربت هذا الإصدار يقبل وسائط بالترتيب: `<destination> <port> <chat>`.
+لتغيير منافذ المضيف، عدّل `.env` ثم أعد تطبيق Compose:
 
-```bash
-# تثبيت النسخة الأولى (odoo-live)
-sudo bash run.sh odoo-live 10018 20018
-
-# تثبيت النسخة الثانية (odoo-test) على منفذ مختلف
-sudo bash run.sh odoo-test 11018 21018
+```dotenv
+ODOO_HTTP_PORT=11018
+ODOO_CHAT_PORT=21018
 ```
 
-### ب) التثبيت بجلب السكربت من المستودع (curl)
-
-المستودع: [DevOpsInfrastructureOdoo / Infrastructure-manage-T / deployment/odoo18](https://github.com/abdalazeim/DevOpsInfrastructureOdoo/tree/main/Infrastructure-manage-T/deployment/odoo18)
-
 ```bash
-curl -s https://raw.githubusercontent.com/abdalazeim/DevOpsInfrastructureOdoo/main/Infrastructure-manage-T/deployment/odoo18/run.sh | bash -s -- odoo-live 10018 20018
-
-curl -s https://raw.githubusercontent.com/abdalazeim/DevOpsInfrastructureOdoo/main/Infrastructure-manage-T/deployment/odoo18/run.sh | bash -s -- odoo-test 11018 21018
+docker compose up -d
 ```
 
-**وسائط السكربت (بالترتيب):**
+> **مهم:** متغيرات `POSTGRES_USER` و`POSTGRES_PASSWORD` و`POSTGRES_DB`
+> تُستخدم عند إنشاء مجلد قاعدة البيانات أول مرة. تغييرها لاحقًا لا يغيّر
+> بيانات قاعدة موجودة.
 
-| # | الوسيط | الوصف |
-|---|--------|-------|
-| 1 | `$1` | مسار/اسم مجلد التثبيت (مثال: `odoo-live` أو `odoo-test`) |
-| 2 | `$2` | منفذ HTTP (الافتراضي: `10018`) |
-| 3 | `$3` | منفذ الدردشة الحية (الافتراضي: `20018`) |
+ضع الإضافات المخصصة في `addons/`، وعدّل إعدادات Odoo في `etc/odoo.conf`.
+يحوّل ملف الدخول القيم السرية إلى ملف إعداد مؤقت داخل الحاوية.
 
 ---
 
-## 4. 🛠️ الطريقة الثالثة: التثبيت اليدوي الكامل (خطوة بخطوة)
+## 🔁 تثبيت نسخ متعددة
 
-إذا كنت تريد التحكم الكامل في كل خطوة:
+يستنسخ `run.sh` المشروع إلى مجلد جديد، ويضبط المنافذ وأسماء الحاويات
+والشبكات وأحجام البيانات لتكون مستقلة لكل نسخة. لا يستبدل مجلدًا موجودًا.
 
-### 1. نسخ ملفات التكوين
+```mermaid
+flowchart TD
+    A([بدء]) --> B{هل مجلد الوجهة موجود؟}
+    B -->|نعم| X[توقف واختر مجلدًا جديدًا]
+    B -->|لا| C{هل Git وDocker وCompose متوفرة؟}
+    C -->|لا| Y[ثبّت المتطلبات الناقصة]
+    C -->|نعم| D[استنساخ مستودع Odoo 18]
+    D --> E[إنشاء إعدادات وبيانات مستقلة]
+    E --> F[تحديد المنافذ والأسماء]
+    F --> G[تشغيل Odoo وPostgreSQL]
+    G --> H([افتح رابط النسخة])
+```
+
+يتطلب السكربت Git وDocker Engine وDocker Compose v2 وصلاحية تشغيل Docker.
+نفّذ الأوامر التالية من مجلد المستودع:
 
 ```bash
-cp etc/odoo.conf etc/odoo.conf.bak
-cp docker-compose.yml docker-compose.yml.bak
+# النسخة الأولى
+sudo bash run.sh --destination odoo-live --port 10018 --chat 20018
+
+# النسخة الثانية بمنافذ مختلفة
+sudo bash run.sh --destination odoo-test --port 11018 --chat 21018
 ```
 
-### 2. تعديل المنافذ (اختياري)
+| النسخة | مجلد التثبيت | رابط Odoo | منفذ المحادثة |
+|---|---|---|---|
+| `odoo-live` | `odoo-live/` | [http://localhost:10018](http://localhost:10018) | `20018` |
+| `odoo-test` | `odoo-test/` | [http://localhost:11018](http://localhost:11018) | `21018` |
 
-افتح ملف `docker-compose.yml` وقم بتعديل المنافذ:
-
-```yaml
-ports:
-  - "10018:8069"      # المنفذ الأول: المضيف:pContainer
-  - "20018:8072"      # منفذ الدردشة الحية
-```
-
-### 3. تعديل إعدادات Odoo
-
-افتح ملف `etc/odoo.conf` وقم بتعديل الإعدادات حسب الحاجة:
-
-```ini
-[options]
-admin_passwd = admin
-db_host = db
-db_port = 5432
-db_user = odoo
-db_password = odoo18
-addons_path = /mnt/extra-addons
-```
-
-### 4. بناء وتشغيل الحاويات
+### تنزيل المشغّل مباشرة من GitHub
 
 ```bash
-sudo docker compose build
-sudo docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/abdalazeim/InstallingOdoo18-Docker-Deployment/main/run.sh \
+  | sudo bash -s -- --destination odoo-live --port 10018 --chat 20018
+
+curl -fsSL https://raw.githubusercontent.com/abdalazeim/InstallingOdoo18-Docker-Deployment/main/run.sh \
+  | sudo bash -s -- --destination odoo-test --port 11018 --chat 21018
 ```
 
-### 5. التحقق من حالة الحاويات
+راجع السكربت قبل تشغيله مباشرة من الإنترنت. بعد التثبيت، أدر النسخة من
+مجلدها:
 
 ```bash
-sudo docker compose ps
-sudo docker logs -f odoo18
-sudo docker logs -f odoo18-db
+cd odoo-live
+docker compose ps
+docker compose logs -f
 ```
+
+لكل نسخة مجلد PostgreSQL وحجم Odoo منفصلان. غيّر كلمات المرور في ملف
+`.env` الخاص بكل نسخة.
 
 ---
 
-## 4. 📦 إدارة الحاويات
+## 🌐 Traefik وHTTPS (اختياري)
 
-| # | العملية | الأمر |
-|---|---------|-------|
-| 1 | تشغيل | `sudo docker compose up -d` |
-| 2 | إعادة تشغيل | `sudo docker compose restart` |
-| 3 | إيقاف | `sudo docker compose stop` |
-| 4 | إيقاف وحذف الحاويات | `sudo docker compose down` |
-| 5 | إيقاف وحذف الحاويات والأحجام | `sudo docker compose down -v` ⚠️ (يحذف بيانات قاعدة البيانات) |
-| 6 | عرض السجلات | `sudo docker compose logs -f` |
-| 7 | عرض السجلات لخدمة محددة | `sudo docker compose logs -f odoo18` |
+يتطلب هذا الوضع وجود Traefik وشبكة Docker خارجية مشتركة معه.
 
----
+1. اضبط النطاق والشبكة في `.env`:
 
-## 5. 🔄 تشغيل نسخ متعددة من Odoo 18 على نفس الجهاز
+   ```dotenv
+   ODOO_DOMAIN=odoo.example.com
+   DOCKER_PROXY_NETWORK=proxy
+   TRAEFIK_ENTRYPOINT=websecure
+   CERTSRESOLVER=letsencrypt
+   ```
 
-يمكنك تشغيل نسخ متعددة مع تحديد مجلدات ومنافذ مختلفة لكل نسخة. المثال أدناه يستخدم نفس التسمية: `odoo-live` (النسخة الأولى) و`odoo-test` (النسخة الثانية):
+2. أنشئ شبكة Traefik إذا لم تكن موجودة:
 
-```bash
-# النسخة الأولى (odoo-live)
-mkdir -p /opt/odoo-live
-cp -r deployment/odoo18/* /opt/odoo-live/
-cd /opt/odoo-live
-sudo sed -i 's/10018:8069/10018:8069/g' docker-compose.yml
-sudo sed -i 's/20018:8072/20018:8072/g' docker-compose.yml
-sudo docker compose up -d
+   ```bash
+   docker network create proxy
+   ```
 
-# النسخة الثانية (odoo-test) على منافذ مختلفة
-mkdir -p /opt/odoo-test
-cp -r deployment/odoo18/* /opt/odoo-test/
-cd /opt/odoo-test
-sudo sed -i 's/10018:8069/11018:8069/g' docker-compose.yml
-sudo sed -i 's/20018:8072/21018:8072/g' docker-compose.yml
-sudo docker compose up -d
-```
+3. شغّل خدمات Traefik:
+
+   ```bash
+   docker compose -f docker-compose.traefik.yml up -d
+   ```
+
+4. اضبط DNS ومحلّل الشهادات في Traefik، ثم افتح
+   `https://odoo.example.com`.
+
+لا تشغّل ملف Compose العادي وملف Traefik للنسخة نفسها في وقت واحد.
 
 ---
 
-## 6. 💾 حفظ واستعادة النسخة الاحتياطية
+## 🧰 إدارة الحاويات
 
-### نسخ احتياطي لقاعدة البيانات
+نفّذ الأوامر من مجلد النسخة:
 
-```bash
-sudo docker exec odoo18-db pg_dump -U odoo postgres > backup_odoo18_$(date +%Y%m%d).sql
-```
+| العملية | الأمر |
+|---|---|
+| تشغيل الخدمات | `docker compose up -d` |
+| عرض الحالة | `docker compose ps` |
+| عرض السجلات | `docker compose logs -f` |
+| سجلات Odoo | `docker compose logs -f odoo18` |
+| سجلات PostgreSQL | `docker compose logs -f db` |
+| إعادة التشغيل | `docker compose restart` |
+| إيقاف مؤقت | `docker compose stop` |
+| الإيقاف وحذف الحاويات مع الإبقاء على البيانات | `docker compose down` |
 
-### استعادة قاعدة البيانات
+تستخدم الخدمات `restart: always` لإعادة التشغيل تلقائيًا عند تعطلها أو إعادة
+تشغيل Docker.
 
-```bash
-sudo docker exec -i odoo18-db psql -U odoo postgres < backup_odoo18.sql
-```
-
-### نسخ احتياطي للمجلدات (Filestore)
-
-```bash
-sudo tar -czvf odoo18_filestore_backup.tar.gz addons etc postgresql
-```
+> `docker compose down` يحتفظ بالبيانات. تجنّب `docker compose down -v` إلا
+> إذا كنت تقصد حذف حجم Odoo، ولا تحذف مجلد `postgresql/` إذا أردت الاحتفاظ
+> بقاعدة البيانات.
 
 ---
 
-## 7. 🐛 استكشاف الأخطاء وإصلاحها
+## 💾 النسخ الاحتياطي
 
-### مشكلة الصلاحيات (Permission Denied)
+احفظ نسخة من قاعدة البيانات وملفات Odoo:
 
 ```bash
-sudo chmod -R 777 addons
-sudo chmod -R 777 etc
-sudo chmod -R 777 postgresql
-sudo chown -R $USER:$USER .
+mkdir -p backups
+docker compose exec -T db pg_dumpall -U odoo18 > backups/postgresql-all.sql
+docker compose exec -T odoo18 tar -C /var/lib/odoo -czf - . \
+  > backups/odoo-data.tar.gz
 ```
 
-### مشكلة في عدد مراقبات الملفات (inotify)
+نفّذ الأوامر من مجلد النسخة المطلوبة. النسخة الاحتياطية قد تحتوي بيانات
+حساسة؛ احفظ نسخة إضافية خارج الخادم واختبر الاستعادة بانتظام.
+
+---
+
+## 🔒 الصلاحيات وإعداد Linux
+
+### الصلاحيات
+
+لا تستخدم `chmod -R 777`؛ فهي تمنح جميع مستخدمي الخادم صلاحيات القراءة
+والكتابة والتنفيذ. استخدم صلاحيات محدودة:
+
+```bash
+chmod 600 .env
+chmod 700 postgresql
+chmod +x entrypoint.sh
+```
+
+عند ظهور مشكلة صلاحيات، افحص المسار والسجلات أولًا:
+
+```bash
+docker compose logs --tail=100
+ls -ld addons etc postgresql
+```
+
+لا تجعل ملفات الأسرار أو بيانات قاعدة البيانات قابلة للكتابة من جميع
+مستخدمي النظام.
+
+### زيادة حد مراقبة الملفات (اختياري)
+
+قد يفيد هذا الضبط عند تشغيل نسخ متعددة إذا ظهرت رسالة تفيد بتجاوز حد مراقبة
+الملفات. لا يلزم عادةً لتشغيل نسخة واحدة:
 
 ```bash
 if grep -qF "fs.inotify.max_user_watches" /etc/sysctl.conf; then
-  echo $(grep -F "fs.inotify.max_user_watches" /etc/sysctl.conf)
+  grep -F "fs.inotify.max_user_watches" /etc/sysctl.conf
 else
   echo "fs.inotify.max_user_watches = 524288" | sudo tee -a /etc/sysctl.conf
 fi
+
 sudo sysctl -p
 ```
 
-###ポート مضبوط بالفعل (Port Already in Use)
+---
 
-```bash
-sudo ss -tuln | grep 10018
-# إذا كان المنفذ مستخدماً، غير المنفذ في docker-compose.yml ثم أعد التشغيل
-sudo docker compose down
-sudo docker compose up -d
-```
+## 🩺 استكشاف الأخطاء
 
-### التحقق من أن PostgreSQL يعمل
+| المشكلة | التحقق أو الحل |
+|---|---|
+| منفذ مستخدم من خدمة أخرى | غيّر `ODOO_HTTP_PORT` أو `ODOO_CHAT_PORT` في `.env` ثم أعد تشغيل Compose |
+| Odoo لا يتصل بـ PostgreSQL | `docker compose logs db odoo18` |
+| التحقق من جاهزية PostgreSQL | `docker compose exec db pg_isready -U odoo18 -d postgre` |
+| Odoo لا يبدأ | `docker compose logs --tail=100 odoo18` |
+| بيانات الدخول القديمة ما زالت مستخدمة | متغيرات PostgreSQL لا تعيد تهيئة مجلد بيانات موجود |
+| Traefik لا يصل إلى Odoo | تحقق من DNS والشبكة واسم النطاق ومدخل وشهادة Traefik |
 
-```bash
-sudo docker exec odoo18-db pg_isready -U odoo
+```mermaid
+flowchart LR
+    A([Odoo لا يستجيب]) --> B{هل الحاويات تعمل؟}
+    B -->|لا| C[تحقق من docker compose ps والسجلات]
+    B -->|نعم| D{هل PostgreSQL جاهز؟}
+    D -->|لا| E[راجع سجلات PostgreSQL وكلمات المرور]
+    D -->|نعم| F{هل المنفذ صحيح؟}
+    F -->|لا| G[راجع إعدادات .env]
+    F -->|نعم| H[راجع إعدادات Odoo وسجلاته]
 ```
 
 ---
 
-## 8. ℹ️ المعلومات التقنية لـ Odoo 18
+## 🗂️ هيكل المشروع والأمان
 
-| العنصر | القيمة |
-|--------|--------|
-| صورة Odoo | `odoo:18` |
-| صورة PostgreSQL | `postgres:17` |
-| منفذ HTTP | `10018` |
-| منفذ الدردشة الحية | `20018` |
-| اسم حاوية Odoo | `odoo18` |
-| اسم حاوية قاعدة البيانات | `odoo18-db` |
-| كلمة مرور قاعدة البيانات الافتراضية | `odoo18` |
-| مجلد البيانات | `./postgresql` |
-| مجلد الإضافات | `./addons` |
-| ملف الإعدادات | `./etc/odoo.conf` |
-| إصدار Docker Compose | `version: '2'` |
-
----
-
-## 9. 🏛 البنية الداخلية للمجلد
-
-```
-deployment/odoo18/
-├── docker-compose.yml          # تعريف خدمات Docker (Odoo + PostgreSQL)
-├── docker-compose.traefik.yml  # تكوين ترافيك (اختياري)
-├── run.sh                      # سكربت التشغيل السريع (إذا كان موجوداً)
-├── entrypoint.sh               # نقطة دخول الحاوية
+```text
+InstallingOdoo18-Docker-Deployment/
+├── addons/                       # إضافات Odoo المخصصة
 ├── etc/
-│   ├── odoo.conf               # إعدادات Odoo
-│   ├── logrotate               # تدوير السجلات
-│   └── requirements.txt        # متطلبات بايثون
-├── addons/                     # الإضافات المخصصة
-├── postgresql/                 # بيانات قاعدة البيانات (يتم إنشاؤه تلقائياً)
-├── versions/
-│   └── odoo18.yml              # إعدادات الإصدارات
-├── scripts/
-│   ├── install-odoo18.sh       # سكربت التثبيت عبر أنسبيل
-│   ├── backup.sh               # سكربت النسخ الاحتياطي
-│   └── health-check.sh         # فحص صحة الخدمة
-├── docker/
-│   └── odoo18-compose.yml.j2   # قالب Docker Compose
-├── config/
-│   ├── odoo.conf               # تكوين Odoo مستقل
-│   └── odoo.standalone.conf    # تكوين Standalone
-├── ansible/                    # ملفات أنسبيل للنشر التلقائي
-│   ├── playbooks/
-│   ├── roles/
-│   ├── inventory/
-│   └── group_vars/
-├── group_vars/
-│   └── all.yml                 # متغيرات عامة
-├── .gitignore
-├── requirements.yml
-├── README.md
-├── LICENSE
-├── Jenkinsfile                 # مسار النشر عبر Jenkins
-└── Jenkins/
-    └── install-odoo18.Jenkinsfile  # ملف النشر عبر Jenkins
+│   └── odoo.conf                 # قالب إعداد Odoo
+├── screenshots/                  # صور توضيحية لـ Odoo 18
+├── postgresql/                   # بيانات PostgreSQL الدائمة
+├── .env.example                  # نموذج متغيرات البيئة
+├── docker-compose.yml            # تشغيل مباشر بالمنافذ
+├── docker-compose.traefik.yml    # تشغيل اختياري عبر Traefik
+├── entrypoint.sh                 # إعداد وقت التشغيل وانتظار PostgreSQL
+├── run.sh                        # تثبيت نسخ متعددة
+├── README.md                     # الدليل الإنجليزي
+└── InstallingOdoo 18.0Command.md # الدليل العربي
 ```
 
----
+### قائمة أمان
 
-## 10. ⚠️ ملاحظات هامة
-
-| # | الملاحظة |
-|---|----------|
-| 1 | لا تستخدم `sudo docker compose down -v` إلا إذا كنت تريد حذف جميع بيانات قاعدة البيانات permanently. |
-| 2 | احتفظ بنسخة احتياطية من مجلد `postgresql` قبل أي عملية تحديث أو حذف. |
-| 3 | إذا كنت تنقل المجلد بين أجهزة، تأكد من أن جميع الأجهزة لديها نفس إصدار Docker. |
-| 4 | لتغيير كلمة مرور الماستر، عدل ملف `etc/odoo.conf` ثم أعد تشغيل الحاوية. |
-| 5 | هذا الدليل مخصص للتثبيت المحلي اليدوي. للنشر عبر أنابيب النشر (CI/CD) استخدم ملف `Jenkinsfile` أو ملفات أنسبيل في مجلد `ansible/`. |
+- استبدل كلمات المرور التجريبية قبل إتاحة النظام للعامة.
+- لا ترفع `.env` أو النسخ الاحتياطية أو بيانات قاعدة البيانات إلى GitHub.
+- لا تنشر منفذ PostgreSQL إلى الإنترنت.
+- استخدم HTTPS عبر وكيل عكسي موثوق في بيئة الإنتاج.
+- حدّث Docker وصور الحاويات باستمرار.
 
 ---
 
-## 11. 📞 الدعم
+## 🔗 روابط مفيدة
 
-للاستفسارات أو الإبلاغ عن مشاكل، راجع ملف `README.md` أو افتح قضية (Issue) في المستودع على GitHub.
-
----
-
-*تم إعداد هذا الدليل كجزء من نظام إدارة البنية التحتية لـ Odoo (Infrastructure Manager).*
+- [مستودع Odoo 18 على GitHub](https://github.com/abdalazeim/InstallingOdoo18-Docker-Deployment)
+- [توثيق Odoo 18](https://www.odoo.com/documentation/18.0/)
+- [توثيق Docker Compose](https://docs.docker.com/compose/)
+- [الإبلاغ عن مشكلة](https://github.com/abdalazeim/InstallingOdoo18-Docker-Deployment/issues)

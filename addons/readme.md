@@ -1,23 +1,8 @@
-# 📁 مجلد الإضافات المخصصة لـ Odoo 18 — Custom Odoo Addons Folder
+# Custom Odoo 18 Addons
 
-> **الغرض:** وضع الإضافات المخصصة لـ Odoo هنا  
-> **المستوى:** مطور Odoo / مسؤول نظام  
-> **التاريخ:** نوفمبر 2026
+Place custom Odoo addon modules in this directory. The directory is mounted
+read-only into the Odoo container at `/mnt/extra-addons`.
 
----
-
-## 📋 جدول المحتويات
-
-1. [تعليمات الاستخدام](#-تعليمات-الاستخدام)
-
----
-
-## 1. 📝 تعليمات الاستخدام
-
-هذا الملف مقصود تركه فارغاً.
-
-This file is intentionally left blank.
-
----
-
-*تم إعداد هذا الملف كجزء من نظام إدارة البنية التحتية لـ Odoo (Infrastructure Manager).*
+After adding a module, update the Apps list and install it from the Odoo
+interface. Keep addon source code in version control; do not put passwords,
+database files, or other runtime data here.

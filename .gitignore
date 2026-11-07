@@ -1,15 +1,22 @@
-*.pyc
-__pycache__/
-*.pyo
+# Local secrets
 .env
 *.env
-*.local
-.vscode/
-.idea/
-.DS_Thumbs
-Thumbs.db
+
+# Persistent application data and backups
+postgresql/
+backups/
+*.dump
+*.sql
+*.tar.gz
+
+# Logs and runtime files
 *.log
 *.retry
-group_vars/vault.yml
-/tmp/.vault_pass
-/tmp/.ansible_vault_pass
+*.pyc
+__pycache__/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
